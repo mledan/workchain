@@ -355,6 +355,37 @@ export enum ActionType {
   ADD_INTEGRATION = 'ADD_INTEGRATION',
   REMOVE_INTEGRATION = 'REMOVE_INTEGRATION',
   SYNC_INTEGRATION = 'SYNC_INTEGRATION',
+
+  // Contribution Actions
+  CREATE_CONTRIBUTION = 'CREATE_CONTRIBUTION',
+  VERIFY_CONTRIBUTION = 'VERIFY_CONTRIBUTION',
+  DISPUTE_CONTRIBUTION = 'DISPUTE_CONTRIBUTION',
+
+  // Credit Actions
+  EARN_CREDITS = 'EARN_CREDITS',
+  SPEND_CREDITS = 'SPEND_CREDITS',
+  TRANSFER_CREDITS = 'TRANSFER_CREDITS',
+  CONVERT_CREDITS_TO_PAYMENT = 'CONVERT_CREDITS_TO_PAYMENT',
+
+  // Team Collaboration Actions
+  INVITE_TEAM_MEMBER = 'INVITE_TEAM_MEMBER',
+  ACCEPT_TEAM_INVITATION = 'ACCEPT_TEAM_INVITATION',
+  REMOVE_TEAM_MEMBER = 'REMOVE_TEAM_MEMBER',
+  UPDATE_PROFIT_SHARE = 'UPDATE_PROFIT_SHARE',
+
+  // Tax Actions
+  SUBMIT_TAX_INFO = 'SUBMIT_TAX_INFO',
+  VERIFY_TAX_INFO = 'VERIFY_TAX_INFO',
+  GENERATE_TAX_DOCUMENT = 'GENERATE_TAX_DOCUMENT',
+
+  // Agreement Actions
+  CREATE_AGREEMENT = 'CREATE_AGREEMENT',
+  SIGN_AGREEMENT = 'SIGN_AGREEMENT',
+  TERMINATE_AGREEMENT = 'TERMINATE_AGREEMENT',
+
+  // Notification Actions
+  SEND_NOTIFICATION = 'SEND_NOTIFICATION',
+  READ_NOTIFICATION = 'READ_NOTIFICATION',
 }
 
 export interface CommandData {
@@ -365,7 +396,7 @@ export interface Block {
   blockNumber: number;
   timestamp: Date;
   action: ActionType;
-  entityType: 'Board' | 'Card' | 'Comment' | 'User' | 'Project' | 'Proposal' | 'Milestone' | 'Payment' | 'Review' | 'Integration';
+  entityType: 'Board' | 'Card' | 'Comment' | 'User' | 'Project' | 'Proposal' | 'Milestone' | 'Payment' | 'Review' | 'Integration' | 'Contribution' | 'CreditTransaction' | 'TeamMember' | 'TaxInfo' | 'Agreement' | 'Notification';
   entityId: string;
   data: CommandData;
   actorId: string; // User who performed the action
@@ -383,4 +414,349 @@ export interface BoardState {
   board: Board;
   cards: Map<string, Card>;
   comments: Map<string, Comment[]>; // cardId -> comments
+}
+
+// ==================== COLLABORATION CREDIT SYSTEM ====================
+
+export enum ContributionType {
+  CODE = 'code',                    // Code commits, PRs
+  CODE_REVIEW = 'code_review',      // Reviewing others' code
+  DESIGN = 'design',                // UI/UX design work
+  DOCUMENTATION = 'documentation',  // Writing docs
+  TESTING = 'testing',              // QA, test writing
+  MENTORING = 'mentoring',          // Helping team members
+  PROJECT_MANAGEMENT = 'project_management', // PM work
+  BUG_FIX = 'bug_fix',             // Quick fixes
+  ARCHITECTURE = 'architecture',    // System design
+  DEVOPS = 'devops'                // CI/CD, infrastructure
+}
+
+export interface ContributionMetrics {
+  linesOfCode?: number;
+  filesChanged?: number;
+  commitsCount?: number;
+  reviewsCompleted?: number;
+  bugsFixed?: number;
+  testsWritten?: number;
+  hoursSpent?: number;
+  impactScore: number; // 1-10, based on significance
+}
+
+export interface Contribution {
+  id: string;
+  projectId: string;
+  contributorId: string;
+  type: ContributionType;
+  description: string;
+  metrics: ContributionMetrics;
+  creditsEarned: number;
+  reputationImpact: number;
+  verifiedBy?: string; // Optional peer verification
+  integrationData?: {
+    platform: IntegrationType;
+    externalId: string; // e.g., GitHub PR number
+    url: string;
+  };
+  status: 'pending' | 'verified' | 'disputed';
+  createdAt: Date;
+  verifiedAt?: Date;
+  blockchainHash: string; // Immutable contribution record
+}
+
+export enum CreditTransactionType {
+  EARNED_CONTRIBUTION = 'earned_contribution',
+  EARNED_MILESTONE = 'earned_milestone',
+  EARNED_BONUS = 'earned_bonus',
+  SPENT_PURCHASE = 'spent_purchase',
+  CONVERTED_TO_PAYMENT = 'converted_to_payment',
+  TRANSFERRED = 'transferred',
+  PLATFORM_FEE = 'platform_fee'
+}
+
+export interface CreditTransaction {
+  id: string;
+  userId: string;
+  amount: number; // Positive for earning, negative for spending
+  type: CreditTransactionType;
+  balance: number; // Balance after transaction
+  referenceId: string; // ID of contribution, project, etc.
+  referenceType: 'contribution' | 'milestone' | 'project' | 'payment';
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  blockchainHash: string;
+}
+
+export interface CreditBalance {
+  userId: string;
+  totalEarned: number;
+  totalSpent: number;
+  currentBalance: number;
+  lockedCredits: number; // Credits in pending transactions
+  lifetimeContributions: number;
+  lastUpdated: Date;
+}
+
+// ==================== TEAM COLLABORATION ====================
+
+export enum CollaborationRole {
+  LEAD = 'lead',                    // Project lead, main contractor
+  CONTRIBUTOR = 'contributor',      // Regular contributor
+  REVIEWER = 'reviewer',            // Code reviewer
+  CONSULTANT = 'consultant',        // Advises on specific issues
+  MENTOR = 'mentor',                // Mentors team members
+  QA = 'qa'                         // Quality assurance
+}
+
+export interface TeamMember {
+  userId: string;
+  role: CollaborationRole;
+  profitSharePercentage: number; // % of project payment
+  hourlyRate?: number;
+  joinedAt: Date;
+  contributions: string[]; // Contribution IDs
+  status: 'active' | 'inactive' | 'removed';
+  invitedBy: string;
+}
+
+export interface CollaborativeProject extends Omit<Project, 'assignedFreelancerId'> {
+  teamMembers: TeamMember[];
+  profitDistribution: {
+    type: 'equal' | 'role-based' | 'contribution-based' | 'custom';
+    distribution: Record<string, number>; // userId -> percentage
+  };
+  collaborationSettings: {
+    requireCodeReview: boolean;
+    minimumReviewers: number;
+    autoApproveContributions: boolean;
+    creditMultiplier: number; // Bonus multiplier for this project
+  };
+}
+
+// ==================== TAX HANDLING SYSTEM ====================
+
+export enum TaxFormType {
+  W9 = 'w9',           // US contractors
+  W8_BEN = 'w8_ben',   // Non-US individuals
+  W8_BEN_E = 'w8_ben_e' // Non-US entities
+}
+
+export interface TaxInformation {
+  id: string;
+  userId: string;
+  formType: TaxFormType;
+  businessName?: string;
+  taxIdType: 'ssn' | 'ein' | 'itin' | 'foreign';
+  taxId: string; // Encrypted
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  };
+  isUsCitizen: boolean;
+  taxTreaty?: {
+    country: string;
+    articleNumber: string;
+    withholdingRate: number;
+  };
+  signedAt: Date;
+  formDocumentUrl: string; // Securely stored signed form
+  verified: boolean;
+  verifiedAt?: Date;
+}
+
+export interface TaxDocument {
+  id: string;
+  userId: string;
+  year: number;
+  type: '1099-NEC' | '1099-K' | 'summary';
+  totalEarnings: number;
+  platformFees: number;
+  netEarnings: number;
+  documentUrl: string; // PDF of tax form
+  filedWithIRS: boolean;
+  filedAt?: Date;
+  generatedAt: Date;
+}
+
+export interface TaxLiability {
+  userId: string;
+  year: number;
+  quarter: number;
+  totalIncome: number;
+  estimatedTaxOwed: number;
+  withholdingRate: number;
+  taxReserve: number; // Amount set aside for taxes
+  lastCalculated: Date;
+}
+
+// ==================== CONTRACTOR COMPLIANCE ====================
+
+export enum AgreementType {
+  INDEPENDENT_CONTRACTOR = 'independent_contractor',
+  NDA = 'nda',
+  IP_ASSIGNMENT = 'ip_assignment',
+  GENERAL_TERMS = 'general_terms'
+}
+
+export interface ContractorAgreement {
+  id: string;
+  projectId: string;
+  clientId: string;
+  contractorId: string;
+  type: AgreementType;
+  terms: {
+    scope: string;
+    deliverables: string[];
+    paymentTerms: string;
+    timeline: {
+      startDate: Date;
+      endDate: Date;
+    };
+    terminationClauses: string[];
+    confidentialityPeriod?: number; // Months
+    ipOwnership: 'client' | 'contractor' | 'shared';
+  };
+  status: 'draft' | 'pending_signature' | 'signed' | 'active' | 'completed' | 'terminated';
+  documentUrl: string;
+  signatures: {
+    clientSignedAt?: Date;
+    contractorSignedAt?: Date;
+    clientIpAddress?: string;
+    contractorIpAddress?: string;
+  };
+  createdAt: Date;
+  effectiveDate?: Date;
+  blockchainHash: string; // Immutable contract record
+}
+
+export interface ComplianceRecord {
+  id: string;
+  userId: string;
+  checks: {
+    taxInfoComplete: boolean;
+    agreementSigned: boolean;
+    identityVerified: boolean;
+    paymentMethodVerified: boolean;
+    backgroundCheckComplete?: boolean;
+  };
+  status: 'incomplete' | 'pending_review' | 'approved' | 'rejected';
+  notes?: string;
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  lastUpdated: Date;
+}
+
+// ==================== ENHANCED PROJECT TYPES ====================
+
+export enum VibeProjectType {
+  VIBE_CODE_FIX = 'vibe_code_fix',     // Quick collaborative fixes
+  PRODUCT_BUILDOUT = 'product_buildout', // Full product development
+  MVP_SPRINT = 'mvp_sprint',            // Rapid MVP creation
+  FEATURE_COLLABORATION = 'feature_collaboration', // Team feature work
+  CODE_REVIEW_SESSION = 'code_review_session',   // Dedicated review
+  ARCHITECTURE_DESIGN = 'architecture_design'    // System design work
+}
+
+export interface VibeCodeFix extends Project {
+  vibeType: VibeProjectType.VIBE_CODE_FIX;
+  urgency: 'critical' | 'high' | 'normal';
+  codebase: {
+    repoUrl: string;
+    branch: string;
+    filesPaths: string[];
+    issueDescription: string;
+  };
+  expectedFixTime: number; // Hours
+  bonusForSpeed: number; // Extra payment if completed early
+}
+
+export interface ProductBuildout extends Project {
+  vibeType: VibeProjectType.PRODUCT_BUILDOUT;
+  phases: {
+    id: string;
+    name: string;
+    description: string;
+    deliverables: string[];
+    teamSize: number;
+    duration: number; // Weeks
+    budget: number;
+    status: 'pending' | 'in_progress' | 'completed';
+  }[];
+  techStack: string[];
+  designAssets?: string[];
+  targetLaunchDate: Date;
+}
+
+// ==================== NOTIFICATION SYSTEM ====================
+
+export enum NotificationType {
+  CONTRIBUTION_VERIFIED = 'contribution_verified',
+  CREDITS_EARNED = 'credits_earned',
+  PAYMENT_RECEIVED = 'payment_received',
+  TAX_FORM_REQUIRED = 'tax_form_required',
+  AGREEMENT_PENDING = 'agreement_pending',
+  TEAM_INVITATION = 'team_invitation',
+  MILESTONE_APPROVED = 'milestone_approved',
+  REVIEW_RECEIVED = 'review_received',
+  PROJECT_INVITATION = 'project_invitation',
+  CODE_REVIEW_REQUEST = 'code_review_request'
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  referenceId?: string; // ID of related entity
+  referenceType?: string;
+  actionUrl?: string;
+  read: boolean;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  createdAt: Date;
+  readAt?: Date;
+}
+
+// ==================== ENHANCED USER TYPES ====================
+
+export interface ExtendedUserProfile extends UserProfile {
+  // Credit system
+  creditBalance: CreditBalance;
+
+  // Reputation breakdown
+  reputationBreakdown: {
+    codeQuality: number;
+    collaboration: number;
+    reliability: number;
+    communication: number;
+    leadership: number;
+  };
+
+  // Compliance
+  complianceStatus: ComplianceRecord;
+  taxInfo?: TaxInformation;
+
+  // Contractor specific
+  contractorProfile?: {
+    specializations: ContributionType[];
+    preferredProjectTypes: (ProjectType | VibeProjectType)[];
+    teamExperience: boolean;
+    leadExperience: boolean;
+    portfolioHighlights: PortfolioItem[];
+    certifications: string[];
+    languages: string[];
+  };
+
+  // Client specific
+  clientProfile?: {
+    companyName?: string;
+    industry?: string;
+    projectsPosted: number;
+    averageBudget: number;
+    paymentReliability: number; // 0-100
+    preferredPaymentMethod: PaymentGateway;
+  };
 }

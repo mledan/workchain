@@ -1,9 +1,28 @@
 import { Chain } from '../blockchain/Chain';
 import { CardRepository } from '../repositories/CardRepository';
 import { BoardRepository } from '../repositories/BoardRepository';
+import { UserProfileRepository } from '../repositories/UserProfileRepository';
+import { ProjectRepository } from '../repositories/ProjectRepository';
+import { ProposalRepository } from '../repositories/ProposalRepository';
+import { PaymentRepository } from '../repositories/PaymentRepository';
+import { ReviewRepository } from '../repositories/ReviewRepository';
+import { ContributionRepository } from '../repositories/ContributionRepository';
+import { CreditTransactionRepository } from '../repositories/CreditTransactionRepository';
+import { TaxInformationRepository } from '../repositories/TaxInformationRepository';
+import { TaxDocumentRepository } from '../repositories/TaxDocumentRepository';
+import { ComplianceRepository } from '../repositories/ComplianceRepository';
+import { AgreementRepository } from '../repositories/AgreementRepository';
+import { NotificationRepository } from '../repositories/NotificationRepository';
 import { EventEmitter, ConsoleLoggerObserver, AuditLogObserver } from '../observers/EventObserver';
 import { CreateCardCommand, MoveCardCommand, UpdateCardCommand, AssignCardCommand } from '../commands/CardCommands';
 import { BoardFactory, TemplateName } from '../factories/BoardFactory';
+import { CreditService } from '../services/CreditService';
+import { TaxService } from '../services/TaxService';
+import { ComplianceService } from '../services/ComplianceService';
+import { CollaborationService } from '../services/CollaborationService';
+import { PaymentService } from '../services/PaymentService';
+import { NotificationService } from '../services/NotificationService';
+import { IntegrationService } from '../services/IntegrationService';
 import { Board, Card, Priority } from '../types';
 
 /**
@@ -21,9 +40,40 @@ export class Application {
 
   // Core components
   private chain: Chain;
+  private eventEmitter: EventEmitter;
+
+  // Kanban Repositories
   private cardRepository: CardRepository;
   private boardRepository: BoardRepository;
-  private eventEmitter: EventEmitter;
+
+  // Marketplace Repositories
+  private userProfileRepository: UserProfileRepository;
+  private projectRepository: ProjectRepository;
+  private proposalRepository: ProposalRepository;
+  private paymentRepository: PaymentRepository;
+  private reviewRepository: ReviewRepository;
+
+  // Collaboration Repositories
+  private contributionRepository: ContributionRepository;
+  private creditTransactionRepository: CreditTransactionRepository;
+
+  // Compliance Repositories
+  private taxInformationRepository: TaxInformationRepository;
+  private taxDocumentRepository: TaxDocumentRepository;
+  private complianceRepository: ComplianceRepository;
+  private agreementRepository: AgreementRepository;
+
+  // Communication Repositories
+  private notificationRepository: NotificationRepository;
+
+  // Services
+  private creditService: CreditService;
+  private taxService: TaxService;
+  private complianceService: ComplianceService;
+  private collaborationService: CollaborationService;
+  private paymentService: PaymentService;
+  private notificationService: NotificationService;
+  private integrationService: IntegrationService;
 
   // Observers
   private consoleLogger: ConsoleLoggerObserver;
@@ -32,17 +82,84 @@ export class Application {
   private constructor() {
     // Initialize core components
     this.chain = new Chain();
+    this.eventEmitter = new EventEmitter();
+
+    // Initialize Kanban repositories
     this.cardRepository = new CardRepository();
     this.boardRepository = new BoardRepository();
-    this.eventEmitter = new EventEmitter();
+
+    // Initialize Marketplace repositories
+    this.userProfileRepository = new UserProfileRepository();
+    this.projectRepository = new ProjectRepository();
+    this.proposalRepository = new ProposalRepository();
+    this.paymentRepository = new PaymentRepository();
+    this.reviewRepository = new ReviewRepository();
+
+    // Initialize Collaboration repositories
+    this.contributionRepository = new ContributionRepository();
+    this.creditTransactionRepository = new CreditTransactionRepository();
+
+    // Initialize Compliance repositories
+    this.taxInformationRepository = new TaxInformationRepository();
+    this.taxDocumentRepository = new TaxDocumentRepository();
+    this.complianceRepository = new ComplianceRepository();
+    this.agreementRepository = new AgreementRepository();
+
+    // Initialize Communication repositories
+    this.notificationRepository = new NotificationRepository();
+
+    // Initialize Services
+    this.creditService = new CreditService(
+      this.contributionRepository,
+      this.creditTransactionRepository,
+      this.chain
+    );
+
+    this.taxService = new TaxService(
+      this.taxInformationRepository,
+      this.taxDocumentRepository,
+      this.paymentRepository,
+      this.chain
+    );
+
+    this.complianceService = new ComplianceService(
+      this.complianceRepository,
+      this.agreementRepository,
+      this.taxInformationRepository,
+      this.chain
+    );
+
+    this.paymentService = new PaymentService(
+      this.paymentRepository,
+      this.chain
+    );
+
+    this.collaborationService = new CollaborationService(
+      this.projectRepository,
+      this.contributionRepository,
+      this.creditService,
+      this.paymentService,
+      this.chain
+    );
+
+    this.notificationService = new NotificationService(
+      this.notificationRepository,
+      this.chain
+    );
+
+    this.integrationService = new IntegrationService(
+      this.userProfileRepository,
+      this.projectRepository,
+      this.chain
+    );
 
     // Initialize observers
     this.consoleLogger = new ConsoleLoggerObserver();
     this.auditLogger = new AuditLogObserver();
 
     // Attach observers to event emitter
-    this.eventEmitter.attach(this.consoleLogger); // Subscribe to all events
-    this.eventEmitter.attach(this.auditLogger); // Subscribe to all events
+    this.eventEmitter.attach(this.consoleLogger);
+    this.eventEmitter.attach(this.auditLogger);
   }
 
   /**
@@ -314,17 +431,159 @@ export class Application {
     return this.auditLogger.getLogs();
   }
 
+  // ==================== Service Accessors ====================
+
+  /**
+   * Get Credit Service (for managing collaboration credits and reputation)
+   */
+  getCreditService(): CreditService {
+    return this.creditService;
+  }
+
+  /**
+   * Get Tax Service (for tax handling, 1099 generation, W-9 collection)
+   */
+  getTaxService(): TaxService {
+    return this.taxService;
+  }
+
+  /**
+   * Get Compliance Service (for contractor agreements and compliance)
+   */
+  getComplianceService(): ComplianceService {
+    return this.complianceService;
+  }
+
+  /**
+   * Get Collaboration Service (for team-based projects with profit sharing)
+   */
+  getCollaborationService(): CollaborationService {
+    return this.collaborationService;
+  }
+
+  /**
+   * Get Payment Service (for multi-gateway payment processing)
+   */
+  getPaymentService(): PaymentService {
+    return this.paymentService;
+  }
+
+  /**
+   * Get Notification Service (for user notifications)
+   */
+  getNotificationService(): NotificationService {
+    return this.notificationService;
+  }
+
+  /**
+   * Get Integration Service (for GitHub, Jira, Slack, etc.)
+   */
+  getIntegrationService(): IntegrationService {
+    return this.integrationService;
+  }
+
+  // ==================== Repository Accessors ====================
+
+  /**
+   * Get User Profile Repository
+   */
+  getUserProfileRepository(): UserProfileRepository {
+    return this.userProfileRepository;
+  }
+
+  /**
+   * Get Project Repository
+   */
+  getProjectRepository(): ProjectRepository {
+    return this.projectRepository;
+  }
+
+  /**
+   * Get Proposal Repository
+   */
+  getProposalRepository(): ProposalRepository {
+    return this.proposalRepository;
+  }
+
+  /**
+   * Get Payment Repository
+   */
+  getPaymentRepository(): PaymentRepository {
+    return this.paymentRepository;
+  }
+
+  /**
+   * Get Review Repository
+   */
+  getReviewRepository(): ReviewRepository {
+    return this.reviewRepository;
+  }
+
+  /**
+   * Get Contribution Repository
+   */
+  getContributionRepository(): ContributionRepository {
+    return this.contributionRepository;
+  }
+
+  /**
+   * Get Credit Transaction Repository
+   */
+  getCreditTransactionRepository(): CreditTransactionRepository {
+    return this.creditTransactionRepository;
+  }
+
+  /**
+   * Get Tax Information Repository
+   */
+  getTaxInformationRepository(): TaxInformationRepository {
+    return this.taxInformationRepository;
+  }
+
+  /**
+   * Get Agreement Repository
+   */
+  getAgreementRepository(): AgreementRepository {
+    return this.agreementRepository;
+  }
+
+  /**
+   * Get Compliance Repository
+   */
+  getComplianceRepository(): ComplianceRepository {
+    return this.complianceRepository;
+  }
+
+  /**
+   * Get Notification Repository
+   */
+  getNotificationRepository(): NotificationRepository {
+    return this.notificationRepository;
+  }
+
   // ==================== Statistics ====================
 
   /**
    * Get application statistics
    */
-  getStats() {
+  async getStats() {
+    const creditStats = await this.creditService.getPlatformStats();
+    const taxStats = await this.taxService.getPlatformTaxStats(new Date().getFullYear());
+    const complianceStats = await this.complianceService.getPlatformComplianceStats();
+
     return {
       blockchain: this.chain.getStats(),
       cards: this.cardRepository.getStats(),
       boards: this.boardRepository.getStats(),
       events: this.eventEmitter.getStats(),
+      credits: creditStats,
+      tax: taxStats,
+      compliance: complianceStats,
+      users: {
+        total: this.userProfileRepository.getStats().total,
+        freelancers: this.userProfileRepository.findByRole('freelancer').then(u => u.length),
+        clients: this.userProfileRepository.findByRole('client').then(u => u.length)
+      }
     };
   }
 
